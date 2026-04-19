@@ -1,0 +1,20 @@
+  build...
+  vet...
+  test...
+=== RUN   TestDNAConstants
+--- PASS: TestDNAConstants (0.00s)
+=== RUN   TestHelixPhaseAdvance
+--- PASS: TestHelixPhaseAdvance (0.00s)
+=== RUN   TestATvsGCBondStrength
+--- PASS: TestATvsGCBondStrength (0.00s)
+=== RUN   TestCurveStability
+--- PASS: TestCurveStability (0.00s)
+=== RUN   TestGrooveAdaptation
+--- PASS: TestGrooveAdaptation (0.00s)
+=== RUN   TestSingleParamIsAdam
+--- PASS: TestSingleParamIsAdam (0.00s)
+PASS
+ok  	github.com/open-ai-org/helix	0.224s
+
+──────────────────────────────────────────────
+[needle]
