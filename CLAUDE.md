@@ -45,5 +45,5 @@ hotRows := c.HotRows()
 
 ## Related Packages
 
-- `github.com/open-ai-org/mongoose` — GPU compute engine
-- `github.com/open-ai-org/needle` — Fused INT8 kernels (performance layer for helix)
+- `github.com/tensorwire/mongoose` — GPU compute engine
+- `github.com/tensorwire/needle` — Fused INT8 kernels (performance layer for helix)

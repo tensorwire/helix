@@ -1,13 +1,11 @@
 # helix
 
-> **This project has moved to [github.com/tensorwire/helix](https://github.com/tensorwire/helix).** Updates will be published under [github.com/tensorwire](https://github.com/tensorwire). Code remaining in open-ai-org is unmaintained.
-
 DNA-inspired gradient descent optimizer. Models the molecular geometry of B-form DNA to couple parameter pairs and drive training. Forward-only training mode eliminates the backward pass entirely.
 
 ## Install
 
 ```bash
-go get github.com/open-ai-org/helix
+go get github.com/tensorwire/helix
 ```
 
 ## Usage
@@ -36,8 +34,8 @@ h.Step(step, loss, lr)       // advance one DNA rung (36 degrees)
 
 ## Related
 
-- [mongoose](https://github.com/open-ai-org/mongoose) — GPU compute engine
-- [needle](https://github.com/open-ai-org/needle) — fused INT8 kernels for helix
+- [mongoose](https://github.com/tensorwire/mongoose) — GPU compute engine
+- [needle](https://github.com/tensorwire/needle) — fused INT8 kernels for helix
 
 ## License
 
