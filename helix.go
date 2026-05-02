@@ -161,7 +161,8 @@ type HelixOptimizer struct {
 	fibA, fibB           int // base pair stride: advance by fibB base pairs
 	fibTurnA, fibTurnB   int // turn-level Fibonacci
 	fibCoilA, fibCoilB   int // supercoil-level Fibonacci
-	fibStepsOnConductor  int // consecutive conductive steps (triggers fib advance)
+	fibStepsOnConductor  int // consecutive conductive steps (legacy, unused with EMA)
+	condEMA              float64 // EMA of conductivity for Fibonacci stride decisions
 
 	// Disk checkpoint callback — set by the training loop.
 	// Called at most once per checkpointInterval steps.
@@ -331,25 +332,15 @@ func (h *HelixOptimizer) Step(step int, loss float32, lr float32) {
 	// Read signal chain conductivity to decide Fibonacci stride
 	conductivity := h.SignalConductivity()
 
-	// Advance Fibonacci stride based on conductivity.
-	// Conductive path → advance the sequence (grow stride).
-	// Resistive path → hold or contract.
-	if conductivity > 0.01 {
-		h.fibStepsOnConductor++
-		// Every 5 conductive steps, advance the Fibonacci sequence
-		if h.fibStepsOnConductor >= 5 {
-			h.fibStepsOnConductor = 0
-			h.fibA, h.fibB = h.fibB, h.fibA+h.fibB
-			// Cap at 21 (Fib(8)) to prevent runaway stride
-			if h.fibB > 21 {
-				h.fibB = 21
-			}
-		}
-	} else {
-		// Resistive — decay the stride back toward 1
-		h.fibStepsOnConductor = 0
+	// EMA Fibonacci stride: low-pass filter on conductivity.
+	// α=0.1 smooths over ~10 steps, ignoring step-to-step noise.
+	h.condEMA = 0.1*conductivity + 0.9*h.condEMA
+	if h.condEMA > 0.005 {
+		h.fibA, h.fibB = h.fibB, h.fibA+h.fibB
+		if h.fibB > 21 { h.fibB = 21 }
+	} else if h.condEMA < -0.005 {
 		if h.fibB > 1 {
-			h.fibA, h.fibB = 1, h.fibA // step back in the sequence
+			h.fibA, h.fibB = 1, h.fibA
 			if h.fibA < 1 { h.fibA = 1 }
 		}
 	}
@@ -470,6 +461,7 @@ func (h *HelixOptimizer) immuneResponse(step int, loss float32) bool {
 				// Reset Fibonacci stride — fresh exploration from scratch
 				h.fibA, h.fibB = 1, 1
 				h.fibStepsOnConductor = 0
+				h.condEMA = 0
 				// Don't reset bestFloor — CRISPR remembers the target
 				return true // signal to caller: skip this step
 			}
@@ -808,17 +800,13 @@ func (h *HelixOptimizer) ForwardOnlyStep(step int, loss float32, lr float32) {
 
 	h.recordSignal(loss, gradNorm)
 
-	// Fibonacci stride (unchanged — reads signal chain conductivity)
+	// EMA Fibonacci stride: low-pass filter on conductivity
 	conductivity := h.SignalConductivity()
-	if conductivity > 0.01 {
-		h.fibStepsOnConductor++
-		if h.fibStepsOnConductor >= 5 {
-			h.fibStepsOnConductor = 0
-			h.fibA, h.fibB = h.fibB, h.fibA+h.fibB
-			if h.fibB > 21 { h.fibB = 21 }
-		}
-	} else {
-		h.fibStepsOnConductor = 0
+	h.condEMA = 0.1*conductivity + 0.9*h.condEMA
+	if h.condEMA > 0.005 {
+		h.fibA, h.fibB = h.fibB, h.fibA+h.fibB
+		if h.fibB > 21 { h.fibB = 21 }
+	} else if h.condEMA < -0.005 {
 		if h.fibB > 1 {
 			h.fibA, h.fibB = 1, h.fibA
 			if h.fibA < 1 { h.fibA = 1 }
@@ -1149,16 +1137,12 @@ func (h *HelixOptimizer) PrepareStep(step int, loss float32, lr float32) (Rung, 
 	// Conductivity from previous signal (before recording this step)
 	conductivity := h.SignalConductivity()
 
-	// Fibonacci stride
-	if conductivity > 0.01 {
-		h.fibStepsOnConductor++
-		if h.fibStepsOnConductor >= 5 {
-			h.fibStepsOnConductor = 0
-			h.fibA, h.fibB = h.fibB, h.fibA+h.fibB
-			if h.fibB > 21 { h.fibB = 21 }
-		}
-	} else {
-		h.fibStepsOnConductor = 0
+	// EMA Fibonacci stride
+	h.condEMA = 0.1*conductivity + 0.9*h.condEMA
+	if h.condEMA > 0.005 {
+		h.fibA, h.fibB = h.fibB, h.fibA+h.fibB
+		if h.fibB > 21 { h.fibB = 21 }
+	} else if h.condEMA < -0.005 {
 		if h.fibB > 1 {
 			h.fibA, h.fibB = 1, h.fibA
 			if h.fibA < 1 { h.fibA = 1 }
