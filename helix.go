@@ -186,6 +186,7 @@ type HelixOptimizer struct {
 	floorWindow      int         // steps to wait after floor contact before judging
 	maxRecoveries    int         // max rewinds before accepting the state
 	rewindThreshold  float32     // fractional rebound that triggers rewind (0.15 = 15%)
+	signalGain       float32     // amplifier for proportional signalScale (0 = legacy ±1 mode)
 
 	// === Signal chain (charge transfer through the pi stack) ===
 	//
@@ -562,6 +563,15 @@ func (h *HelixOptimizer) restoreCheckpoint() {
 // Default 0.15 (15%). Lower = more aggressive rewinding.
 func (h *HelixOptimizer) SetRewindThreshold(t float32) { h.rewindThreshold = t }
 
+// SetSignalGain sets the amplification factor for proportional signalScale.
+// When gain > 0, signalScale = clamp(gain * dLoss/|prevLoss|, -1, +1) — proportional
+// to the magnitude of improvement or worsening, symmetric in both directions.
+// When gain == 0 (default), legacy mode: +1 improving, -ratio worsening.
+func (h *HelixOptimizer) SetSignalGain(g float32) { h.signalGain = g }
+
+// SignalGain returns the current signal gain multiplier.
+func (h *HelixOptimizer) SignalGain() float32 { return h.signalGain }
+
 // ImmuneActive returns true if the immune system is currently monitoring.
 func (h *HelixOptimizer) ImmuneActive() bool { return h.immuneActive }
 
@@ -773,18 +783,29 @@ func (h *HelixOptimizer) ForwardOnlyStep(step int, loss float32, lr float32) {
 		return
 	}
 
-	// Signal direction: loss going down = positive signal, up = negative
-	// Normalized by loss magnitude to prevent scale issues
+	// Signal direction: loss going down = positive, up = negative.
 	var signalScale float32
-	if dLoss < 0 {
-		// Improving — momentum was right. Scale by how much we improved.
-		signalScale = 1.0
+	if h.signalGain > 0 {
+		// Proportional mode: symmetric, amplified by gain.
+		// dLoss < 0 → positive (improving), dLoss > 0 → negative (worsening).
+		raw := float32(-dLoss / math.Max(math.Abs(h.prevLoss), 1e-6))
+		signalScale = raw * h.signalGain
+		if signalScale > 1.0 {
+			signalScale = 1.0
+		} else if signalScale < -1.0 {
+			signalScale = -1.0
+		}
 	} else {
-		// Worsening — momentum was wrong. Dampen proportional to worsening.
-		// Small worsening (noise): gentle correction. Big worsening: hard reverse.
-		ratio := float32(dLoss / math.Max(math.Abs(h.prevLoss), 1e-6))
-		signalScale = -ratio // negative = reverse momentum direction
-		if signalScale < -1.0 { signalScale = -1.0 } // cap reversal
+		// Legacy mode: +1 improving, -ratio worsening.
+		if dLoss < 0 {
+			signalScale = 1.0
+		} else {
+			ratio := float32(dLoss / math.Max(math.Abs(h.prevLoss), 1e-6))
+			signalScale = -ratio
+			if signalScale < -1.0 {
+				signalScale = -1.0
+			}
+		}
 	}
 
 	// Gradient norm from momentum (for signal chain recording)
