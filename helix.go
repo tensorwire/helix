@@ -184,6 +184,7 @@ type HelixOptimizer struct {
 	// Thresholds
 	floorWindow      int         // steps to wait after floor contact before judging
 	maxRecoveries    int         // max rewinds before accepting the state
+	rewindThreshold  float32     // fractional rebound that triggers rewind (0.15 = 15%)
 
 	// === Signal chain (charge transfer through the pi stack) ===
 	//
@@ -255,8 +256,9 @@ func NewHelixOptimizer(lr, beta1, beta2, eps, weightDecay float32) *HelixOptimiz
 		curveY:        math.Sqrt(8.0), // y = sqrt(x³ + 7) at x=1
 		bestFloor:      math.MaxFloat32,
 		checkpointLoss: math.MaxFloat32,
-		floorWindow:    10,
-		maxRecoveries:  3,
+		floorWindow:     10,
+		maxRecoveries:   3,
+		rewindThreshold: 0.15,
 		signalCap:           100,
 		signal:              make([]signalRung, 100),
 		checkpointInterval:  88, // double helix 🧬
@@ -458,7 +460,7 @@ func (h *HelixOptimizer) immuneResponse(step int, loss float32) bool {
 		if stepsSinceContact >= h.floorWindow {
 			// Judgment time: did the loss rebound?
 			rebound := loss - h.bestFloor
-			threshold := h.bestFloor * 0.15 // 15% rebound = virus damage
+			threshold := h.bestFloor * h.rewindThreshold
 
 			if rebound > threshold && h.recoveryCount < h.maxRecoveries && h.checkpoint != nil {
 				// === IMMUNE RESPONSE: kill, collect, rewind ===
@@ -563,6 +565,10 @@ func (h *HelixOptimizer) restoreCheckpoint() {
 		idx++
 	}
 }
+
+// SetRewindThreshold sets the fractional rebound that triggers immune rewind.
+// Default 0.15 (15%). Lower = more aggressive rewinding.
+func (h *HelixOptimizer) SetRewindThreshold(t float32) { h.rewindThreshold = t }
 
 // ImmuneActive returns true if the immune system is currently monitoring.
 func (h *HelixOptimizer) ImmuneActive() bool { return h.immuneActive }
